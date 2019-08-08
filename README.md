@@ -18,7 +18,7 @@ appId=`cat output/create-for-rbac.json | jq -r '.["appId"]'`
 
 az role assignment create --assignee $appId --role Reader > .output/assign-create-role-reader.json
 az role assignment delete --assignee $appId --role Contributor
-```sh
+```
 
 # terraform
 
