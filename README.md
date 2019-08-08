@@ -1,9 +1,13 @@
+# Setup local tooling
+
+```sh
 brew install terraform azure-cli kubectl helm jq
+```
 
+# Azure 
+
+```sh
 az login
-
-terraform init
-
 open https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade
 export TF_VAR_client_id=2c652d75-e01c-4644-bf77-4887341b189c
 export TF_VAR_client_secret=ii:-uCspOjYCM6=?gDpjcTSU1ynCp6C1
@@ -14,18 +18,36 @@ appId=`cat output/create-for-rbac.json | jq -r '.["appId"]'`
 
 az role assignment create --assignee $appId --role Reader > .output/assign-create-role-reader.json
 az role assignment delete --assignee $appId --role Contributor
+```sh
 
-terraform plan -o .output/terraform.plan
+# terraform
 
+```sh
+terraform init
+terraform plan -out .output/terraform.plan
+terraform apply .output/terraform.plan
+```
+
+# Configure kubectl
+
+```sh
 echo "$(terraform output kube_config)" > ~/.azurek8s-$appId.json
 export KUBECONFIG=~/.azurek8s-$appId.json
 kubectl get nodes
+```
 
+# Download confluent operator 
+
+```sh
 mkdir confluent-operator
 cd confluent-operator
 wget https://platform-ops-bin.s3-us-west-1.amazonaws.com/operator/confluent-operator-20190726-v0.65.0.tar.gz
 tar -xvf *
+```
 
+# Setup Kubernetes
+
+```sh
 echo Create an RBAC service account.
 kubectl create serviceaccount tiller -n kube-system
 
@@ -34,10 +56,12 @@ kubectl create clusterrolebinding tiller \
     --clusterrole=cluster-admin \
     --serviceaccount kube-system:tiller
 
-
 helm init --service-account tiller
+```
 
+# Setup confluent operator
 
+```sh
 rm -f ./helm/providers/private.yaml
 location=`az aks list | jq -r '.[]["location"]'`
 echo your region is $location
@@ -46,9 +70,12 @@ global:
   provider:
     region: $location
 """ > ./helm/providers/private.yaml
+```
 
+# Deploy the operator
 cd helm
 
+```sh
 helm install \
     -f ./providers/azure.yaml \
     --name operator \
@@ -56,12 +83,15 @@ helm install \
     --set operator.enabled=true \
     ./confluent-operator    
 
-
 kubectl -n operator patch serviceaccount default -p '{"imagePullSecrets": [{"name": "confluent-docker-registry" }]}'
 
 echo let's verify operator and manager are up
 kubectl get pods -n operator
+```
 
+# Install Zookepeer
+
+```sh
 echo "installing zookeeper"
 helm install \
     -f ./providers/azure.yaml \
@@ -95,11 +125,15 @@ Zookeeper cluster is deployed through CR.
 
      kubectl edit zookeeper zookeeper  -n operator
 """
+```
 
+# Install Kafka
 
+```sh
 helm install \
     -f ./providers/azure.yaml \
     --name kafka \
     --namespace operator \
     --set kafka.enabled=true \
     ./confluent-operator
+```
